@@ -1,0 +1,232 @@
+use16
+org 100h
+
+    jmp start
+
+;-- Данные ----------------------------------------------------------
+msg_input  db 'Enter 8 single digits:', 13, 10, '$'
+msg_orig   db 13, 10, 'Original array: ', '$'
+msg_res    db 13, 10, 'Result (first 0 replaced with 0Fh): ', '$'
+msg_none   db 13, 10, 'No zero elements found.', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array      db 8 dup(0)
+count      dw 8
+target_val db 0Fh      ; Значение 0Fh
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод исходного массива
+    mov ah, 09h
+    mov dx, msg_input
+    int 21h
+
+    mov cx, [count]
+    mov bx, array
+input_loop:
+    mov ah, 01h
+    int 21h
+    sub al, '0'         ; ASCII -> Число
+    mov [bx], al        ; Сохраняем в память
+    inc bx
+    
+    mov ah, 02h         ; Пробел
+    mov dl, ' '
+    int 21h
+    loop input_loop
+
+    ; 2. Вывод оригинального массива
+    mov ah, 09h
+    mov dx, msg_orig
+    int 21h
+    call print_array
+
+    ; 3. Поиск первого нулевого элемента
+    mov cx, [count]
+    mov bx, array
+find_zero:
+    cmp byte [bx], 0    ; Сравниваем элемент с нулем
+    je found_zero       ; Если равен (Jump if Equal), переходим к замене
+    inc bx
+    loop find_zero
+
+    ; Если нулей не найдено
+    mov ah, 09h
+    mov dx, msg_none
+    int 21h
+    jmp exit
+
+found_zero:
+    ; 4. Замена нуля на 0Fh
+    mov al, [target_val]
+    mov [bx], al        ; Записываем 0Fh по адресу первого найденного нуля
+
+    ; 5. Вывод итогового массива
+    mov ah, 09h
+    mov dx, msg_res
+    int 21h
+    call print_array
+
+exit:
+    mov ah, 09h
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h
+    int 21h
+    mov ax, 4C00h       ; Завершение
+    int 21h
+
+;-- Подпрограмма вывода массива -------------------------------------
+print_array:
+    push cx
+    push bx
+    mov cx, [count]
+    mov bx, array
+.lp:
+    mov al, [bx]
+    
+    ; Вывод числа (может быть двузначным, так как 0Fh = 15)
+    xor ah, ah
+    mov dl, 10
+    div dl              ; AX / 10 -> AL (частное), AH (остаток)
+    
+    mov dx, ax
+    test dl, dl
+    jz .single
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+.single:
+    mov dl, dh
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    
+    mov dl, ' '
+    int 21h
+    inc bx
+    loop .lp
+    pop bx
+    pop cx
+    ret
+
+
+! Описание:
+Goto: 0Fh ( 15 ), 18E
+
+! Вводи: 5 2 0 8 0 4 1 3
+
+! Как работает:
+
+use16                   ; Использовать 16-битный режим процессора (DOS)
+org 100h                ; Начало программы с адреса 100h (стандарт для .COM файлов)
+
+    jmp start           ; Прыжок на метку start, чтобы пропустить блок данных
+
+;-- Данные в оперативной памяти -------------------------------------
+msg_input  db 'Enter 8 single digits:', 13, 10, '$'              ; Приглашение к вводу
+msg_orig   db 13, 10, 'Original array: ', '$'                    ; Текст для оригинала
+msg_res    db 13, 10, 'Result (first 0 replaced with 0Fh): ', '$' ; Текст для результата
+msg_none   db 13, 10, 'No zero elements found.', '$'             ; Если нулей нет
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'    ; Текст паузы
+
+array      db 8 dup(0)  ; Резервируем 8 байт под массив, заполняем нулями
+count      dw 8         ; Количество элементов
+target_val db 0Fh       ; Константа 0Fh (в десятичной системе это 15)
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод исходного массива
+    mov ah, 09h         ; Функция DOS 09h: печать строки
+    mov dx, msg_input   ; DX указывает на текст приглашения
+    int 21h             ; Вызов прерывания DOS
+
+    mov cx, [count]     ; Загружаем 8 в CX (счетчик цикла)
+    mov bx, array       ; BX — указатель на начало массива
+input_loop:
+    mov ah, 01h         ; Функция DOS 01h: ввод символа с эхом (в AL)
+    int 21h             
+    sub al, '0'         ; Превращаем ASCII-символ ('0'...'9') в число (0...9)
+    mov [bx], al        ; Записываем число в память по адресу в BX
+    inc bx              ; Сдвигаем указатель на следующий байт
+    
+    mov ah, 02h         ; Функция DOS 02h: вывод одного символа
+    mov dl, ' '         ; Выводим пробел для разделения ввода
+    int 21h             
+    loop input_loop     ; Уменьшаем CX, если не 0 — идем на начало цикла
+
+    ; 2. Вывод оригинального массива
+    mov ah, 09h         
+    mov dx, msg_orig    
+    int 21h             
+    call print_array    ; Вызов подпрограммы печати
+
+    ; 3. Поиск первого нулевого элемента
+    mov cx, [count]     ; Снова настраиваем счетчик на 8 итераций
+    mov bx, array       ; Снова ставим BX на начало массива
+find_zero:
+    cmp byte [bx], 0    ; Сравниваем значение в памяти по адресу BX с нулем
+    je found_zero       ; Если нашли ноль (Jump if Equal), прыгаем на замену
+    inc bx              ; Если не ноль, переходим к следующему адресу
+    loop find_zero      ; Повторяем, пока не просмотрим все 8 элементов
+
+    ; Если цикл loop завершился сам, значит мы не нашли ни одного нуля
+    mov ah, 09h         
+    mov dx, msg_none    ; Печатаем "No zero elements found."
+    int 21h             
+    jmp exit            ; Уходим на завершение программы
+
+found_zero:
+    ; 4. Замена нуля на 0Fh (15)
+    ; В BX сейчас хранится адрес того самого первого нуля, который мы нашли
+    mov al, [target_val]; Загружаем 0Fh в регистр AL
+    mov [bx], al        ; Записываем 0Fh прямо в память по адресу найденного нуля
+
+    ; 5. Вывод итогового массива
+    mov ah, 09h         
+    mov dx, msg_res     
+    int 21h             
+    call print_array    ; Печатаем массив с внесенным изменением
+
+exit:
+    mov ah, 09h         
+    mov dx, msg_pause   
+    int 21h             
+    mov ah, 08h         ; Ожидание нажатия клавиши (пауза)
+    int 21h             
+    mov ax, 4C00h       ; Функция выхода в DOS
+    int 21h             
+
+;-- Подпрограмма вывода массива -------------------------------------
+print_array:
+    push cx             ; Сохраняем регистры в стек
+    push bx             
+    mov cx, [count]     
+    mov bx, array       
+.lp:
+    mov al, [bx]        ; Берем число из массива
+    
+    ; Поскольку 0Fh — это 15, число может быть двузначным
+    xor ah, ah          ; Очищаем AH для деления
+    mov dl, 10          ; Будем делить на 10
+    div dl              ; AX / 10 -> AL (десятки), AH (единицы)
+    
+    mov dx, ax          ; Сохраняем результат: DL (десятки), DH (единицы)
+    test dl, dl         ; Есть ли в числе десятки?
+    jz .single          ; Если нет, печатаем только единицы
+    add dl, '0'         ; Конвертируем десятки в ASCII
+    mov ah, 02h         
+    int 21h             ; Печать первой цифры
+.single:
+    mov dl, dh          ; Переходим к единицам
+    add dl, '0'         ; Конвертируем единицы в ASCII
+    mov ah, 02h         
+    int 21h             ; Печать второй цифры (или единственной)
+    
+    mov dl, ' '         ; Вывод пробела
+    int 21h             
+    inc bx              ; Следующий элемент массива
+    loop .lp            ; Цикл по CX
+    pop bx              ; Восстанавливаем регистры из стека
+    pop cx              
+    ret                 ; Выход из подпрограммы
