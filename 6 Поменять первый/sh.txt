@@ -1,0 +1,253 @@
+use16
+org 100h
+
+    jmp start
+
+;-- Данные ----------------------------------------------------------
+msg_input  db 'Enter 8 single digits (use - for negative):', 13, 10, '$'
+msg_orig   db 13, 10, 'Original array: ', '$'
+msg_res    db 13, 10, 'Result (swapped first neg and last): ', '$'
+msg_none   db 13, 10, 'No negative elements found.', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array      db 8 dup(0)
+count      dw 8
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива
+    mov ah, 09h
+    mov dx, msg_input
+    int 21h
+
+    mov cx, [count]
+    mov bx, array
+input_loop:
+    mov ah, 01h
+    int 21h
+    
+    cmp al, '-'         ; Если ввели '-', читаем цифру дальше
+    jne .pos
+    int 21h
+    sub al, '0'
+    neg al
+    jmp .save
+.pos:
+    sub al, '0'
+.save:
+    mov [bx], al
+    inc bx
+    
+    mov ah, 02h
+    mov dl, ' '
+    int 21h
+    loop input_loop
+
+    ; 2. Вывод оригинала
+    mov ah, 09h
+    mov dx, msg_orig
+    int 21h
+    call print_array
+
+    ; 3. Поиск первого отрицательного
+    mov cx, [count]
+    mov bx, array
+find_neg:
+    cmp byte [bx], 0    ; Сравниваем элемент с нулем
+    jl found_neg        ; Если меньше (Jump if Less), нашли
+    inc bx
+    loop find_neg
+
+    ; Если отрицательных нет
+    mov ah, 09h
+    mov dx, msg_none
+    int 21h
+    jmp exit
+
+found_neg:
+    ; BX сейчас указывает на первый отрицательный элемент
+    ; Найдем адрес последнего элемента
+    mov di, array
+    add di, [count]
+    dec di              ; DI указывает на последний байт массива
+
+    ; 4. Обмен значениями (Swap)
+    mov al, [bx]        ; AL = первый отрицательный
+    mov dl, [di]        ; DL = последний элемент
+    
+    mov [bx], dl        ; Записываем последний на место отрицательного
+    mov [di], al        ; Записываем отрицательный на последнее место
+
+    ; 5. Вывод результата
+    mov ah, 09h
+    mov dx, msg_res
+    int 21h
+    call print_array
+
+exit:
+    mov ah, 09h
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h
+    int 21h
+    mov ax, 4C00h
+    int 21h
+
+;-- Подпрограмма вывода массива -------------------------------------
+print_array:
+    push cx
+    push bx
+    mov cx, [count]
+    mov bx, array
+.lp:
+    mov al, [bx]
+    cmp al, 0
+    jge .p
+    push ax
+    mov dl, '-'
+    mov ah, 02h
+    int 21h
+    pop ax
+    neg al
+.p:
+    add al, '0'
+    mov dl, al
+    mov ah, 02h
+    int 21h
+    mov dl, ' '
+    int 21h
+    inc bx
+    loop .lp
+    pop bx
+    pop cx
+    ret
+
+
+! Описание:
+Goto: 1A7
+
+! Как работает:
+
+use16                   ; Использовать 16-битный режим процессора (DOS)
+org 100h                ; Начало программы со смещения 100h (для .COM файлов)
+
+    jmp start           ; Прыжок на метку start, чтобы пропустить данные и не исполнять их
+
+;-- Блок данных в оперативной памяти --------------------------------
+msg_input  db 'Enter 8 single digits (use - for negative):', 13, 10, '$' ; Приглашение
+msg_orig   db 13, 10, 'Original array: ', '$'        ; Текст для вывода оригинала
+msg_res    db 13, 10, 'Result (swapped first neg and last): ', '$' ; Текст для результата
+msg_none   db 13, 10, 'No negative elements found.', '$' ; Если нет отрицательных
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$' ; Текст паузы
+
+array      db 8 dup(0)  ; Выделяем 8 байт под массив, заполняем нулями
+count      dw 8         ; Размер массива (8 элементов)
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива с клавиатуры
+    mov ah, 09h         ; Функция DOS 09h: печать строки из DX
+    mov dx, msg_input   ; Загружаем адрес сообщения в DX
+    int 21h             ; Системный вызов
+
+    mov cx, [count]     ; Устанавливаем счетчик цикла CX = 8
+    mov bx, array       ; Устанавливаем указатель BX на начало массива
+input_loop:
+    mov ah, 01h         ; Функция DOS 01h: ввод символа с клавиатуры
+    int 21h             ; Символ попадает в AL
+    
+    cmp al, '-'         ; Сравниваем введенный символ с минусом
+    jne .pos            ; Если не минус, прыгаем на метку .pos
+    int 21h             ; Если минус, считываем следующий символ (саму цифру)
+    sub al, '0'         ; Превращаем символ цифры в число (например, '5' -> 5)
+    neg al              ; Делаем число отрицательным (5 -> -5)
+    jmp .save           ; Прыгаем к сохранению
+.pos:
+    sub al, '0'         ; Конвертируем положительную цифру из ASCII в число
+.save:
+    mov [bx], al        ; Записываем итоговое число в память по адресу в BX
+    inc bx              ; Сдвигаем указатель BX на следующий байт
+    
+    mov ah, 02h         ; Функция DOS 02h: вывод символа
+    mov dl, ' '         ; Выводим пробел для разделения ввода
+    int 21h             ; Системный вызов
+    loop input_loop     ; Повторяем, пока CX не станет 0
+
+    ; 2. Вывод оригинального массива (для наглядности)
+    mov ah, 09h         ; Выводим строку msg_orig
+    mov dx, msg_orig
+    int 21h
+    call print_array    ; Вызов подпрограммы печати массива
+
+    ; 3. Поиск первого отрицательного элемента
+    mov cx, [count]     ; Снова настраиваем цикл на 8 итераций
+    mov bx, array       ; Указатель BX на начало массива
+find_neg:
+    cmp byte [bx], 0    ; Сравниваем текущий байт в памяти с нулем
+    jl found_neg        ; Если меньше (Jump if Less), значит нашли — прыгаем!
+    inc bx              ; Иначе идем к следующему адресу
+    loop find_neg       ; Продолжаем поиск
+
+    ; Если цикл закончился и мы здесь — отрицательных чисел не было
+    mov ah, 09h         ; Печатаем msg_none
+    mov dx, msg_none
+    int 21h
+    jmp exit            ; Уходим на выход
+
+found_neg:
+    ; Если мы здесь, то BX сейчас хранит АДРЕС первого отрицательного элемента
+    ; Теперь найдем адрес последнего элемента массива
+    mov di, array       ; Кладем в DI адрес начала массива
+    add di, [count]     ; Прибавляем длину (8)
+    dec di              ; Вычитаем 1 (так как адресация с 0). Теперь DI — адрес 8-го байта
+
+    ; 4. Обмен значениями (Алгоритм Swap)
+    mov al, [bx]        ; Читаем первый отрицательный в AL
+    mov dl, [di]        ; Читаем последний элемент в DL
+    
+    mov [bx], dl        ; Записываем последний элемент туда, где был отрицательный
+    mov [di], al        ; Записываем отрицательный туда, где был последний
+
+    ; 5. Вывод измененного массива
+    mov ah, 09h         ; Выводим заголовок результата
+    mov dx, msg_res
+    int 21h
+    call print_array    ; Печатаем массив с изменениями
+
+exit:
+    mov ah, 09h         ; Выводим текст паузы
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h         ; Ждем нажатия любой клавиши
+    int 21h
+    mov ax, 4C00h       ; Завершение программы
+    int 21h
+
+;-- Подпрограмма вывода массива (из BX) -----------------------------
+print_array:
+    push cx             ; Сохраняем CX в стек (защита от порчи)
+    push bx             ; Сохраняем BX в стек
+    mov cx, [count]     ; Настраиваем цикл на 8 раз
+    mov bx, array       ; Указываем на начало массива
+.lp:
+    mov al, [bx]        ; Берем число из памяти
+    cmp al, 0           ; Проверяем знак
+    jge .p              ; Если положительное, идем печатать цифру
+    push ax             ; Если отрицательное — сначала печатаем '-'
+    mov dl, '-'
+    mov ah, 02h
+    int 21h
+    pop ax
+    neg al              ; Убираем минус у числа для вывода самой цифры
+.p:
+    add al, '0'         ; Число -> ASCII
+    mov dl, al
+    mov ah, 02h
+    int 21h             ; Печатаем цифру
+    mov dl, ' '         ; Печатаем пробел
+    int 21h
+    inc bx              ; Переходим к следующему байту
+    loop .lp            ; Крутим цикл
+    pop bx              ; Восстанавливаем BX из стека
+    pop cx              ; Восстанавливаем CX из стека
+    ret                 ; Возвращаемся в основную программу
