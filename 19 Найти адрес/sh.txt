@@ -1,0 +1,209 @@
+use16
+org 100h
+
+    jmp start
+
+;-- Данные ----------------------------------------------------------
+msg_input  db 'Enter 8 digits:', 13, 10, '$'
+msg_res    db 13, 10, 'Address of last zero element: ', '$'
+msg_none   db 13, 10, 'No zero elements found.', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array      db 8 dup(0)
+count      dw 8
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива
+    mov ah, 09h
+    mov dx, msg_input
+    int 21h
+
+    mov cx, [count]
+    mov bx, array
+input_loop:
+    mov ah, 01h
+    int 21h
+    sub al, '0'
+    mov [bx], al
+    inc bx
+    mov ah, 02h
+    mov dl, ' '
+    int 21h
+    loop input_loop
+
+    ; 2. Поиск последнего нуля (идем с конца массива)
+    mov cx, [count]
+    mov bx, array
+    add bx, cx
+    dec bx              ; BX теперь указывает на последний элемент
+
+find_zero:
+    cmp byte [bx], 0    ; Сравниваем с нулем
+    je found_zero       ; Если нашли, выходим из цикла
+    dec bx              ; Переходим к предыдущему элементу
+    loop find_zero
+
+    ; Если нулей нет
+    mov ah, 09h
+    mov dx, msg_none
+    int 21h
+    jmp exit
+
+found_zero:
+    ; 3. Вывод адреса в формате Segment:Offset
+    mov ah, 09h
+    mov dx, msg_res
+    int 21h
+
+    ; Выводим сегмент (DS)
+    mov ax, ds
+    call print_hex_word
+    
+    mov dl, ':'
+    mov ah, 02h
+    int 21h
+    
+    ; Выводим смещение (BX)
+    mov ax, bx
+    call print_hex_word
+
+exit:
+    mov ah, 09h
+    mov dx, msg_pause
+    int 21h
+    mov ah, 01h         ; Пауза
+    int 21h
+    mov ax, 4C00h
+    int 21h
+
+;-- Процедура вывода 16-битного числа в HEX (для адреса) -------------
+print_hex_word:
+    push ax bx cx dx
+    mov bx, ax
+    mov cx, 4           ; 4 полубайта в слове
+.loop:
+    rol bx, 4           ; Вращаем, чтобы взять старшие 4 бита
+    mov dl, bl
+    and dl, 0Fh
+    cmp dl, 9
+    jbe .digit
+    add dl, 7           ; Коррекция для A-F
+.digit:
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop .loop
+    pop dx cx bx ax
+    ret
+
+
+! Описание:
+Goto: 16C
+
+! Вводи: 1 0 3 0 5 0 7 8
+
+! Как работает:
+
+use16                   ; Использовать 16-битный режим (DOS)
+org 100h                ; Начало программы с адреса 100h (.COM файл)
+
+    jmp start           ; Прыжок на метку start, чтобы пропустить данные
+
+;-- Данные в оперативной памяти -------------------------------------
+msg_input  db 'Enter 8 digits:', 13, 10, '$'             ; Приглашение
+msg_res    db 13, 10, 'Address of last zero element: ', '$' ; Заголовок результата
+msg_none   db 13, 10, 'No zero elements found.', '$'     ; Если нулей нет
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$' ; Текст паузы
+
+array      db 8 dup(0)  ; Выделяем 8 байт под массив
+count      dw 8         ; Размер массива
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива
+    mov ah, 09h         ; Функция DOS 09h: вывод строки
+    mov dx, msg_input   ; DX указывает на текст приглашения
+    int 21h             ; Вызов прерывания
+
+    mov cx, [count]     ; Загружаем 8 в счетчик CX для цикла ввода
+    mov bx, array       ; BX — указатель на начало массива
+input_loop:
+    mov ah, 01h         ; Функция DOS 01h: ввод символа в AL
+    int 21h             
+    sub al, '0'         ; ASCII-код цифры -> число (например, '0' станет 0)
+    mov [bx], al        ; Записываем число в память по адресу в BX
+    inc bx              ; Сдвигаем указатель на следующий байт
+    mov ah, 02h         ; Функция DOS 02h: вывод символа
+    mov dl, ' '         ; Выводим пробел для красоты
+    int 21h             
+    loop input_loop     ; Повторяем, пока не введем 8 цифр
+
+    ; 2. Поиск последнего нуля (идем с конца массива)
+    mov cx, [count]     ; CX = 8 (счетчик для поиска)
+    mov bx, array       ; BX указывает на начало массива
+    add bx, cx          ; BX = адрес начала + 8 (указывает за пределы массива)
+    dec bx              ; BX = адрес последнего (8-го) элемента массива
+
+
+
+find_zero:
+    cmp byte [bx], 0    ; Сравниваем значение в памяти по адресу BX с нулем
+    je found_zero       ; Если нашли ноль (Jump if Equal), прыгаем на вывод адреса
+    dec bx              ; Если не нашли, уменьшаем адрес (идем к началу)
+    loop find_zero      ; Уменьшаем CX, если не 0 — продолжаем поиск
+
+    ; Если цикл loop закончился сам, значит нулей не встретили
+    mov ah, 09h         
+    mov dx, msg_none    ; Выводим сообщение "No zero elements found."
+    int 21h             
+    jmp exit            ; Уходим на выход
+
+found_zero:
+    ; 3. Вывод адреса в формате Segment:Offset
+    ; В этот момент в BX хранится адрес того самого последнего нуля
+    mov ah, 09h         
+    mov dx, msg_res     ; Выводим текст "Address of..."
+    int 21h             
+
+    ; Выводим сегмент (в DOS это обычно значение регистра DS)
+    mov ax, ds          ; Копируем текущий сегмент данных в AX
+    call print_hex_word ; Печатаем AX в виде 4-х шестнадцатеричных цифр
+    
+    mov dl, ':'         ; Печатаем двоеточие между сегментом и смещением
+    mov ah, 02h         
+    int 21h             
+    
+    ; Выводим смещение (адрес нуля, который мы нашли и сохранили в BX)
+    mov ax, bx          ; Копируем адрес из BX в AX
+    call print_hex_word ; Печатаем адрес в HEX формате
+
+exit:
+    mov ah, 09h         
+    mov dx, msg_pause   
+    int 21h             
+    mov ah, 01h         ; Пауза (ожидание ввода)
+    int 21h             
+    mov ax, 4C00h       ; Завершение программы
+    int 21h             
+
+;-- Процедура вывода 16-битного числа в HEX (например, 012A) ---------
+print_hex_word:
+    push ax bx cx dx    ; Сохраняем все регистры в стек (чтобы не испортить)
+    mov bx, ax          ; Копируем число для обработки в BX
+    mov cx, 4           ; В 16-битном числе 4 полубайта (4 HEX цифры)
+.loop:
+    ; Вращаем BX влево на 4 бита. Старшая цифра оказывается в младших битах BL
+    rol bx, 4           
+    mov dl, bl          ; Копируем BL в DL
+    and dl, 0Fh         ; Обнуляем всё, кроме последних 4 бит (получаем цифру 0-15)
+    cmp dl, 9           ; Проверяем: цифра или буква (A-F)?
+    jbe .digit          ; Если 0-9, прыгаем на конвертацию
+    add dl, 7           ; Если A-F, добавляем коррекцию (разрыв в таблице ASCII)
+.digit:
+    add dl, '0'         ; Превращаем число в ASCII-символ
+    mov ah, 02h         ; Выводим символ на экран
+    int 21h             
+    loop .loop          ; Повторяем для всех 4 цифр числа
+    pop dx cx bx ax     ; Восстанавливаем регистры из стека
+    ret                 ; Возврат в основную программу
