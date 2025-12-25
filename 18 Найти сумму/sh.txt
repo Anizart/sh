@@ -1,0 +1,242 @@
+use16
+org 100h
+
+    jmp start
+
+;-- Данные ----------------------------------------------------------
+msg_input  db 'Enter 8 digits (use - for negative):', 13, 10, '$'
+msg_res    db 13, 10, 'Sum of negative elements: ', '$'
+msg_none   db 13, 10, 'No negative elements found.', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array      db 8 dup(0)
+count      dw 8
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива
+    mov ah, 09h
+    mov dx, msg_input
+    int 21h
+
+    mov cx, [count]
+    mov bx, array
+input_loop:
+    mov ah, 01h
+    int 21h
+    cmp al, '-'         
+    jne .pos
+    int 21h
+    sub al, '0'
+    neg al
+    jmp .save
+.pos:
+    sub al, '0'
+.save:
+    mov [bx], al
+    inc bx
+    mov ah, 02h
+    mov dl, ' '
+    int 21h
+    loop input_loop
+
+    ; 2. Подсчет суммы отрицательных элементов
+    mov cx, [count]
+    mov bx, array
+    xor dx, dx          ; DX будет хранить сумму (обнуляем)
+
+sum_loop:
+    mov al, [bx]        ; Берем элемент массива
+    cmp al, 0           ; Проверяем на отрицательность
+    jge .next           ; Если >= 0, пропускаем
+    
+    ; Складываем. Так как AL - байт, а DX - слово, используем расширение знака
+    cbw                 ; Расширяет знак из AL в AX (AL -> AX)
+    add dx, ax          ; Прибавляем к общей сумме в DX
+    
+.next:
+    inc bx
+    loop sum_loop
+
+    ; 3. Проверка: была ли найдена хоть какая-то сумма
+    test dx, dx
+    jnz print_result
+    
+    mov ah, 09h
+    mov dx, msg_none
+    int 21h
+    jmp exit
+
+print_result:
+    ; 4. Вывод результата
+    mov bx, dx          ; Сохраняем сумму в BX для вывода
+    mov ah, 09h
+    mov dx, msg_res
+    int 21h
+    
+    mov ax, bx          ; Передаем сумму в AX для подпрограммы печати
+    call print_num_ax
+
+exit:
+    mov ah, 09h
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h
+    int 21h
+    mov ax, 4C00h
+    int 21h
+
+;-- Процедура вывода числа в AX (со знаком) -------------------------
+print_num_ax:
+    test ax, ax
+    jns .positive
+    push ax
+    mov dl, '-'
+    mov ah, 02h
+    int 21h
+    pop ax
+    neg ax
+.positive:
+    xor cx, cx
+    mov bx, 10
+.div_loop:
+    xor dx, dx
+    div bx
+    push dx
+    inc cx
+    test ax, ax
+    jnz .div_loop
+.print_loop:
+    pop dx
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop .print_loop
+    ret
+
+
+! Описание:
+Goto: 182
+
+! Вводи: 5 -3 2 -1 0 -4  7 8
+
+! Как работает:
+
+use16                   ; Использовать 16-битный режим (DOS)
+org 100h                ; Смещение 100h для .COM файлов
+
+    jmp start           ; Прыжок на метку start, чтобы пропустить данные
+
+;-- Данные в оперативной памяти -------------------------------------
+msg_input  db 'Enter 8 digits (use - for negative):', 13, 10, '$' ; Приглашение
+msg_res    db 13, 10, 'Sum of negative elements: ', '$'           ; Текст результата
+msg_none   db 13, 10, 'No negative elements found.', '$'          ; Текст, если нет отрицательных
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'     ; Текст паузы
+
+array      db 8 dup(0)  ; Выделение 8 байт под массив, заполненных нулями
+count      dw 8         ; Размер массива (количество элементов)
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива
+    mov ah, 09h         ; Функция DOS 09h: вывод строки на экран
+    mov dx, msg_input   ; Загрузка адреса строки в DX
+    int 21h             ; Вызов прерывания (печать сообщения)
+
+    mov cx, [count]     ; Устанавливаем счетчик цикла (8)
+    mov bx, array       ; BX — указатель на начало массива
+input_loop:
+    mov ah, 01h         ; Функция DOS 01h: ввод символа с клавиатуры в AL
+    int 21h             
+    cmp al, '-'         ; Сравниваем введенный символ с минусом
+    jne .pos            ; Если не минус, прыгаем на .pos
+    int 21h             ; Если минус, вводим саму цифру в AL
+    sub al, '0'         ; ASCII-код ('5') -> Число (5)
+    neg al              ; Делаем число отрицательным (5 -> -5)
+    jmp .save           ; Прыгаем к сохранению
+.pos:
+    sub al, '0'         ; Конвертируем положительную цифру из ASCII в число
+.save:
+    mov [bx], al        ; Сохраняем число из AL в память по адресу в BX
+    inc bx              ; Сдвигаем указатель BX на следующий байт
+    mov ah, 02h         ; Функция DOS 02h: вывод символа
+    mov dl, ' '         ; Выводим пробел для удобства
+    int 21h             
+    loop input_loop     ; Повторяем, пока CX не станет 0
+
+    ; 2. Подсчет суммы отрицательных элементов
+    mov cx, [count]     ; Снова настраиваем цикл на 8 повторений
+    mov bx, array       ; Ставим указатель на начало массива
+    xor dx, dx          ; Обнуляем DX. Здесь будет накапливаться сумма
+
+sum_loop:
+    mov al, [bx]        ; Читаем текущий байт из памяти в AL
+    cmp al, 0           ; Сравниваем число с нулем
+    jge .next           ; Если число >= 0 (положительное или ноль), пропускаем его
+    
+    ; Математическая тонкость:
+    ; AL — это байт (8 бит), DX — это слово (16 бит). 
+    ; Напрямую "add dx, al" сделать нельзя. Нужно расширить AL до AX.
+    
+    cbw                 ; Расширяет знак из AL в AX. Если AL=-5 (FBh), AX станет FFFBh.
+    add dx, ax          ; Прибавляем полученное 16-битное число к общей сумме в DX
+    
+.next:
+    inc bx              ; Переходим к следующему элементу массива
+    loop sum_loop       ; Повторяем для всех 8 элементов
+
+    ; 3. Проверка: нашли ли мы хоть одно отрицательное число
+    test dx, dx         ; Проверяем DX на равенство нулю
+    jnz print_result    ; Если DX не 0, переходим к печати результата
+    
+    mov ah, 09h         ; Если DX = 0, значит отрицательных чисел не было
+    mov dx, msg_none
+    int 21h
+    jmp exit            ; Уходим на выход
+
+print_result:
+    ; 4. Вывод результата
+    mov bx, dx          ; Сохраняем итоговую сумму в BX (на всякий случай)
+    mov ah, 09h         ; Печатаем заголовок "Sum of..."
+    mov dx, msg_res
+    int 21h
+    
+    mov ax, bx          ; Передаем сумму в AX для подпрограммы печати
+    call print_num_ax   ; Вызов процедуры, которая умеет печатать многозначные числа со знаком
+
+exit:
+    mov ah, 09h         ; Печать сообщения о паузе
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h         ; Ожидание нажатия клавиши
+    int 21h
+    mov ax, 4C00h       ; Завершение программы
+    int 21h
+
+;-- Процедура вывода числа в AX (со знаком) -------------------------
+print_num_ax:
+    test ax, ax         ; Проверяем число в AX на знак
+    jns .positive       ; Если число положительное, пропускаем вывод минуса
+    push ax             ; Сохраняем число в стек
+    mov dl, '-'         ; Выводим символ '-'
+    mov ah, 02h
+    int 21h
+    pop ax              ; Достаем число обратно
+    neg ax              ; Делаем его положительным для алгоритма деления
+.positive:
+    xor cx, cx          ; Обнуляем счетчик цифр
+    mov bx, 10          ; Будем делить на 10
+.div_loop:
+    xor dx, dx          ; Очищаем DX для деления
+    div bx              ; AX / 10. Остаток (цифра) в DX, частное в AX
+    push dx             ; Сохраняем цифру в стек
+    inc cx              ; Увеличиваем счетчик цифр
+    test ax, ax         ; Проверяем, осталось ли что-то в AX
+    jnz .div_loop       ; Если да, продолжаем делить
+.print_loop:
+    pop dx              ; Достаем цифру из стека (в правильном порядке)
+    add dl, '0'         ; Число -> ASCII
+    mov ah, 02h
+    int 21h             ; Печатаем цифру
+    loop .print_loop    ; Повторяем для всех цифр в CX
+    ret                 ; Возврат из процедуры
