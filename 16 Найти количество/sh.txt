@@ -1,0 +1,201 @@
+use16
+org 100h
+
+    jmp start
+
+;-- Данные ----------------------------------------------------------
+msg_input  db 'Enter 8 hex values (00-FF, 2 chars each, e.g. 1A 5B):', 13, 10, '$'
+msg_orig   db 13, 10, 'Array in memory: ', '$'
+msg_res    db 13, 10, 'Count of elements < 50h: ', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array      db 8 dup(0)
+count      dw 8
+threshold  db 50h      ; Наш порог 50h
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива (по 2 HEX символа на число)
+    mov ah, 09h
+    mov dx, msg_input
+    int 21h
+
+    mov cx, [count]
+    mov bx, array
+input_loop:
+    call input_hex_byte ; Вводим первый байт
+    mov [bx], al
+    inc bx
+    
+    mov ah, 02h         ; Пробел между вводом
+    mov dl, ' '
+    int 21h
+    loop input_loop
+
+    ; 2. Подсчет элементов < 50h
+    mov cx, [count]
+    mov bx, array
+    xor si, si          ; SI - наш счетчик результата
+
+count_loop:
+    mov al, [bx]
+    cmp al, [threshold] ; Беззнаковое сравнение с 50h
+    jae .next           ; Если выше или равно (Above/Equal), пропускаем
+    inc si              ; Если ниже (Below), увеличиваем счетчик
+.next:
+    inc bx
+    loop count_loop
+
+    ; 3. Вывод результата
+    mov ah, 09h
+    mov dx, msg_res
+    int 21h
+
+    mov ax, si
+    add al, '0'         ; Преобразуем число в ASCII
+    mov dl, al
+    mov ah, 02h
+    int 21h
+
+    ; 4. Выход
+    mov ah, 09h
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h
+    int 21h
+    mov ax, 4C00h
+    int 21h
+
+;-- Процедура ввода HEX-байта (2 символа -> 1 байт в AL) -------------
+input_hex_byte:
+    push cx
+    ; Читаем первый символ (старшая тетрада)
+    mov ah, 01h
+    int 21h
+    call hex_to_bin
+    shl al, 4
+    mov cl, al
+    ; Читаем второй символ (младшая тетрада)
+    mov ah, 01h
+    int 21h
+    call hex_to_bin
+    or al, cl
+    pop cx
+    ret
+
+hex_to_bin: ; Преобразует символ в AL ('0'-'F') в число 0-15
+    cmp al, '9'
+    jbe .digit
+    and al, 0DFh ; В верхний регистр, если это буквы a-f
+    sub al, 'A'-10
+    ret
+.digit:
+    sub al, '0'
+    ret
+
+
+! Описание:
+Goto: 188
+
+! Вводи: 10 4F 50 A0 05 7F 22 FF
+
+! Как работает:
+
+use16                   ; Использовать 16-битный режим (DOS)
+org 100h                ; Смещение 100h для .COM файлов
+
+    jmp start           ; Пропустить данные и перейти к коду
+
+;-- Данные в оперативной памяти -------------------------------------
+msg_input  db 'Enter 8 hex values (00-FF, 2 chars each, e.g. 1A 5B):', 13, 10, '$'
+msg_orig   db 13, 10, 'Array in memory: ', '$'
+msg_res    db 13, 10, 'Count of elements < 50h: ', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array      db 8 dup(0)  ; Массив на 8 байт
+count      dw 8         ; Размер массива
+threshold  db 50h       ; Пороговое значение 50h (80 в десятичной)
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод массива (по 2 HEX символа на каждое число)
+    mov ah, 09h         ; Функция DOS 09h: печать строки
+    mov dx, msg_input   ; Загрузить адрес сообщения в DX
+    int 21h             ; Вызов DOS
+
+    mov cx, [count]     ; Загрузить 8 в счетчик цикла CX
+    mov bx, array       ; BX указывает на начало массива
+input_loop:
+    call input_hex_byte ; Вызов подпрограммы: читает 2 символа и возвращает число в AL
+    mov [bx], al        ; Записать полученный байт в память по адресу в BX
+    inc bx              ; Сдвинуть указатель на следующий байт
+    
+    mov ah, 02h         ; Функция DOS 02h: вывод символа
+    mov dl, ' '         ; Вывести пробел для визуального разделения
+    int 21h             ; Вызов DOS
+    loop input_loop     ; Уменьшить CX, повторить если CX > 0
+
+    ; 2. Подсчет элементов, которые меньше 50h
+    mov cx, [count]     ; CX = 8 (счетчик цикла)
+    mov bx, array       ; BX снова указывает на начало массива
+    xor si, si          ; Обнулить SI. SI будет хранить количество найденных элементов
+
+count_loop:
+    mov al, [bx]        ; Читаем текущий байт из памяти в AL
+    cmp al, [threshold] ; Сравниваем значение в AL с порогом 50h
+    
+    ; JAE (Jump if Above or Equal) — беззнаковый переход, если AL >= 50h.
+    ; Мы пропускаем инкремент, если условие "меньше 50h" НЕ выполнено.
+    jae .next           
+    
+    inc si              ; Если число < 50h, увеличиваем счетчик SI на 1
+.next:
+    inc bx              ; Переходим к следующему адресу в памяти
+    loop count_loop     ; Повторяем для всех элементов массива
+
+    ; 3. Вывод результата
+    mov ah, 09h         ; Печать заголовка msg_res
+    mov dx, msg_res
+    int 21h
+
+    mov ax, si          ; Поместить итоговый счетчик в AX
+    add al, '0'         ; Превратить цифру (0-8) в ASCII-символ ('0'-'8')
+    mov dl, al          ; Кладём символ в DL для вывода
+    mov ah, 02h         ; Функция вывода символа
+    int 21h             ; Вызов DOS (печать результата)
+
+    ; 4. Завершение программы
+    mov ah, 09h         ; Сообщение "Press any key..."
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h         ; Ожидание нажатия клавиши
+    int 21h
+    mov ax, 4C00h       ; Системный выход в DOS
+    int 21h
+
+;-- Процедура ввода HEX-байта (из "1" и "A" делает одно число 1Ah) ---
+input_hex_byte:
+    push cx             ; Сохранить CX (чтобы не сбить основной цикл)
+    ; Читаем первый символ (например, '1')
+    mov ah, 01h         
+    int 21h             
+    call hex_to_bin     ; Перевод '1' в число 1
+    shl al, 4           ; Сдвиг влево на 4 бита (1 превращается в 10h)
+    mov cl, al          ; Сохраняем результат в CL
+    ; Читаем второй символ (например, 'A')
+    mov ah, 01h         
+    int 21h             
+    call hex_to_bin     ; Перевод 'A' в число 10 (0Ah)
+    or al, cl           ; Соединяем: 10h ИЛИ 0Ah = 1Ah
+    pop cx              ; Восстановить CX
+    ret                 ; Вернуться в start
+
+hex_to_bin: ; Вспомогательная функция: символ '0'-'F' -> число 0-15
+    cmp al, '9'         ; Проверяем: это цифра или буква?
+    jbe .digit          ; Если '0'-'9', прыгаем на .digit
+    and al, 0DFh        ; Маленькие буквы 'a-f' делаем заглавными 'A-F'
+    sub al, 'A'-10      ; 'A' (65) превращаем в 10
+    ret
+.digit:
+    sub al, '0'         ; '0' (48) превращаем в 0
+    ret
