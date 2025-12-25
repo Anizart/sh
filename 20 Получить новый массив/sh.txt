@@ -1,0 +1,264 @@
+use16
+org 100h
+
+    jmp start
+
+;-- Данные ----------------------------------------------------------
+msg_input  db 'Enter 8 hex values (00-EF, e.g. 05 10 A2):', 13, 10, '$'
+msg_src    db 13, 10, 'Source Array: ', '$'
+msg_dest   db 13, 10, 'New Array (Elements + 10h): ', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array_src  db 8 dup(0)
+array_dest db 8 dup(0)
+count      dw 8
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод исходного массива
+    mov ah, 09h
+    mov dx, msg_input
+    int 21h
+
+    mov cx, [count]
+    mov bx, array_src
+input_loop:
+    call input_hex_byte ; Вводим число
+    mov [bx], al        ; Сохраняем в первый массив
+    inc bx
+    
+    mov dl, ' '         ; Пробел для красоты
+    mov ah, 02h
+    int 21h
+    loop input_loop
+
+    ; 2. Копирование и увеличение на 10h
+    mov cx, [count]
+    mov si, array_src
+    mov di, array_dest
+copy_proc:
+    mov al, [si]
+    add al, 10h         ; Увеличиваем значение на 10h
+    mov [di], al
+    inc si
+    inc di
+    loop copy_proc
+
+    ; 3. Вывод исходного массива
+    mov ah, 09h
+    mov dx, msg_src
+    int 21h
+    mov bx, array_src
+    call print_array
+
+    ; 4. Вывод нового массива
+    mov ah, 09h
+    mov dx, msg_dest
+    int 21h
+    mov bx, array_dest
+    call print_array
+
+    ; Выход
+    mov ah, 09h
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h
+    int 21h
+    mov ax, 4C00h
+    int 21h
+
+;--- Процедура корректного ввода HEX-байта ---
+input_hex_byte:
+    push cx
+    mov ah, 01h         ; Читаем первый символ
+    int 21h
+    call char_to_hex
+    shl al, 4           ; Сдвигаем в старшую тетраду
+    mov cl, al
+    
+    mov ah, 01h         ; Читаем второй символ
+    int 21h
+    call char_to_hex
+    or al, cl           ; Объединяем тетрады
+    pop cx
+    ret
+
+char_to_hex:
+    cmp al, '9'
+    jbe .is_digit
+    and al, 0DFh        ; В верхний регистр (a->A)
+    sub al, 'A'-10      ; 'A' станет 10
+    ret
+.is_digit:
+    sub al, '0'         ; '0' станет 0
+    ret
+
+;--- Процедура вывода массива ---
+print_array:
+    push cx
+    mov cx, [count]
+.lp:
+    mov al, [bx]
+    call print_hex_byte
+    mov dl, ' '
+    mov ah, 02h
+    int 21h
+    inc bx
+    loop .lp
+    pop cx
+    ret
+
+print_hex_byte:
+    push ax
+    shr al, 4           ; Выводим левую цифру
+    call .nibble
+    pop ax
+.nibble:
+    and al, 0Fh
+    add al, '0'
+    cmp al, '9'
+    jbe .out
+    add al, 7
+.out:
+    mov dl, al
+    mov ah, 02h
+    int 21h
+    ret
+
+
+! Описание:
+Goto: 17E
+
+! Вводи: 05 10 A2 FF 00 45 1F 0A
+
+! Как работает:
+
+use16                   ; Указываем использовать 16-битный режим (для DOS)
+org 100h                ; Программа начинается с адреса 100h (стандарт .COM)
+
+    jmp start           ; Перепрыгиваем через блок данных к коду выполнения
+
+;-- Данные в оперативной памяти -------------------------------------
+msg_input  db 'Enter 8 hex values (00-EF, e.g. 05 10 A2):', 13, 10, '$'
+msg_src    db 13, 10, 'Source Array: ', '$'
+msg_dest   db 13, 10, 'New Array (Elements + 10h): ', '$'
+msg_pause  db 13, 10, 13, 10, 'Press any key to exit...', '$'
+
+array_src  db 8 dup(0)  ; Исходный массив (8 байт), заполнен нулями
+array_dest db 8 dup(0)  ; Новый массив (8 байт) для хранения результата
+count      dw 8         ; Переменная, хранящая размер массивов
+;--------------------------------------------------------------------
+
+start:
+    ; 1. Ввод исходного массива
+    mov ah, 09h         ; Функция DOS 09h: вывод строки на экран
+    mov dx, msg_input   ; DX указывает на текст приглашения
+    int 21h             ; Системный вызов прерывания
+
+    mov cx, [count]     ; Загружаем 8 в счетчик циклов CX
+    mov bx, array_src   ; BX указывает на начало первого массива
+input_loop:
+    call input_hex_byte ; Вызов подпрограммы: читает 2 символа и возвращает байт в AL
+    mov [bx], al        ; Записываем полученное число в память по адресу в BX
+    inc bx              ; Сдвигаем указатель BX на следующую ячейку
+    
+    mov dl, ' '         ; После каждого числа выводим пробел
+    mov ah, 02h         ; Функция DOS 02h: печать символа
+    int 21h             
+    loop input_loop     ; Уменьшаем CX, если не 0 — идем на начало цикла
+
+    ; 2. Копирование и увеличение значений на 10h
+    mov cx, [count]     ; Снова устанавливаем счетчик цикла на 8
+    mov si, array_src   ; SI указывает на начало исходного массива (Источник)
+    mov di, array_dest  ; DI указывает на начало нового массива (Приемник)
+
+
+
+copy_proc:
+    mov al, [si]        ; Берем байт из исходного массива по адресу в SI
+    add al, 10h         ; Прибавляем к значению 10h (десятичное 16)
+    mov [di], al        ; Записываем измененное значение в новый массив по адресу в DI
+    inc si              ; Сдвигаем указатель источника на 1 байт вперед
+    inc di              ; Сдвигаем указатель приемника на 1 байт вперед
+    loop copy_proc      ; Повторяем для всех 8 элементов
+
+    ; 3. Вывод исходного массива для проверки
+    mov ah, 09h         ; Печать заголовка "Source Array"
+    mov dx, msg_src
+    int 21h
+    mov bx, array_src   ; Подготавливаем адрес начала первого массива для печати
+    call print_array    ; Вызываем процедуру вывода массива
+
+    ; 4. Вывод нового (измененного) массива
+    mov ah, 09h         ; Печать заголовка "New Array..."
+    mov dx, msg_dest
+    int 21h
+    mov bx, array_dest  ; Подготавливаем адрес начала второго массива
+    call print_array    ; Вызываем процедуру вывода массива
+
+    ; Выход из программы
+    mov ah, 09h         ; Сообщение о паузе
+    mov dx, msg_pause
+    int 21h
+    mov ah, 08h         ; Ожидание нажатия любой клавиши
+    int 21h
+    mov ax, 4C00h       ; Функция DOS: завершение программы
+    int 21h
+
+;--- Процедура ввода HEX-байта (читает два нажатия клавиш) ---
+input_hex_byte:
+    push cx             ; Сохраняем CX, чтобы не испортить основной цикл
+    mov ah, 01h         ; Читаем 1-й символ (старшая половина байта)
+    int 21h
+    call char_to_hex    ; Переводим символ (напр. 'A') в число (10)
+    shl al, 4           ; Сдвигаем на 4 бита влево (10 превращается в 10h или 160)
+    mov cl, al          ; Временно сохраняем в CL
+    
+    mov ah, 01h         ; Читаем 2-й символ (младшая половина байта)
+    int 21h
+    call char_to_hex    ; Переводим в число
+    or al, cl           ; Объединяем две части через логическое ИЛИ
+    pop cx              ; Восстанавливаем CX
+    ret                 ; Возвращаемся в основной код
+
+char_to_hex:            ; Вспомогательная подпрограмма конвертации символа
+    cmp al, '9'         ; Сравниваем с '9'
+    jbe .is_digit       ; Если это цифра 0-9, прыгаем на .is_digit
+    and al, 0DFh        ; Убираем разницу между 'a' и 'A' (битовая маска)
+    sub al, 'A'-10      ; Конвертируем 'A' (65) в число 10
+    ret
+.is_digit:
+    sub al, '0'         ; Конвертируем '0' (48) в число 0
+    ret
+
+;--- Процедура вывода массива на экран ---
+print_array:
+    push cx             ; Сохраняем регистр счетчика
+    mov cx, [count]     ; Печатаем 8 элементов
+.lp:
+    mov al, [bx]        ; Берем байт по текущему адресу в BX
+    call print_hex_byte ; Вызываем подпрограмму печати HEX-числа
+    mov dl, ' '         ; Выводим пробел после числа
+    mov ah, 02h
+    int 21h
+    inc bx              ; Переходим к следующему байту
+    loop .lp            ; Крутим цикл
+    pop cx              ; Восстанавливаем CX
+    ret
+
+print_hex_byte:         ; Печать 1 байта в HEX формате
+    push ax             ; Сохраняем всё число
+    shr al, 4           ; Сдвигаем вправо, выделяем левую цифру (старшую тетраду)
+    call .nibble        ; Печатаем её
+    pop ax              ; Достаем число обратно
+.nibble:
+    and al, 0Fh         ; Оставляем только правую цифру (младшую тетраду)
+    add al, '0'         ; Конвертируем в символ
+    cmp al, '9'         ; Если получилось больше 9, значит это буква
+    jbe .out
+    add al, 7           ; Корректируем для символов 'A'-'F'
+.out:
+    mov dl, al          ; Передаем в DL для печати
+    mov ah, 02h
+    int 21h
+    ret
