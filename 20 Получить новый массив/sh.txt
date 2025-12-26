@@ -127,7 +127,7 @@ print_hex_byte:
 
 
 ! Описание:
-Goto: 17E
+Goto: 17E, 186
 
 ! Вводи: 05 10 A2 FF 00 45 1F 0A
 
@@ -262,3 +262,4 @@ print_hex_byte:         ; Печать 1 байта в HEX формате
     mov ah, 02h
     int 21h
     ret
+
